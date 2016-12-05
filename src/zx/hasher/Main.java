@@ -13,6 +13,7 @@ import java.util.Arrays;
 import java.util.LinkedList;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
 
 public class Main {
@@ -26,7 +27,7 @@ public class Main {
     static boolean shouldHandle(File file) {
         try {
             return file.isFile()
-                    && file.getAbsolutePath().equals(file.getCanonicalPath()) // 不是 sym link 类型文件
+                    && file.getAbsoluteFile().equals(file.getCanonicalFile()) // 不是 sym link 类型文件
                     && file.length() > 5 * 1024 * 1024; // 必需大于 5M 的文件
         } catch (IOException e) {
             e.printStackTrace();
@@ -37,18 +38,23 @@ public class Main {
     private static void handle(final File file) {
         workexec.submit(new Runnable() {
 
+
                             ThreadLocal<MessageDigest> threadDigest = new ThreadLocal<>();
                             ThreadLocal<ByteBuffer> threadBuffer = new ThreadLocal<>();
 
                             @Override
                             public void run() {
                                 // 把文件进行Hash
+
                                 try {
+
+                                    //Thread.currentThread().setPriority(Thread.NORM_PRIORITY + 1);
+
                                     if (threadDigest.get() == null) {
                                         threadDigest.set(MessageDigest.getInstance("SHA-1"));
                                     }
                                     if (threadBuffer.get() == null) {
-                                        threadBuffer.set(ByteBuffer.allocateDirect(32 * 1024));
+                                        threadBuffer.set(ByteBuffer.allocateDirect(32 * 1024 * 1024));
                                     }
                                     FileInputStream fileInputStream = new FileInputStream(file);
                                     FileChannel channel = fileInputStream.getChannel();
@@ -59,7 +65,8 @@ public class Main {
                                     digest.reset();
                                     buffer.clear();
                                     while (true) {
-                                        if (channel.read(buffer) == -1) {
+                                        int readCount = channel.read(buffer);
+                                        if (readCount <= 0) {
                                             break;
                                         }
                                         buffer.flip();
@@ -83,6 +90,7 @@ public class Main {
                                             // write
                                             System.out.println(b.toString());
                                             fileWriter.append(b.toString()).append("\n");
+                                            fileWriter.flush();
                                         } catch (IOException e) {
                                             e.printStackTrace();
                                         }
@@ -100,7 +108,7 @@ public class Main {
     public static void main(String[] args) throws Exception {
 
         String outPath = "hash.txt";
-        String[] inPaths = new String[] {System.getenv("HOME")};
+        String[] inPaths = new String[]{System.getProperty("user.home")};
 
         // parse args
         //        if (args.length == 0) {
@@ -115,19 +123,24 @@ public class Main {
                 if (i < args.length) {
                     String argOutPath = args[++i];
                     if (argOutPath != null) {
-                        outPath = argOutPath.replaceFirst("^~", System.getenv("HOME"));
+                        outPath = argOutPath.replaceFirst("^~", System.getProperty("user.home"));
                     }
                     i++;
                     continue;
                 } else {
                     throw new IllegalArgumentException("argument -o must be followed by a file path");
                 }
+            } else {
+                inPathArray.add(args[i++].trim().replaceFirst("^~", System.getProperty("user.home")));
             }
-            inPathArray.add(args[i].trim().replaceFirst("^~", System.getenv("HOME")));
         }
         if (!inPathArray.isEmpty()) {
             inPaths = inPathArray.toArray(new String[inPathArray.size()]);
         }
+
+        System.out.println("start iterate files. inPath = " + Arrays.toString(inPaths) + ", outPath = " + outPath);
+        System.out.println("config: work thread num = " + Math.max(
+                Runtime.getRuntime().availableProcessors(), 1));
 
         // 准备输出文件
         fileWriter = new FileWriter(outPath);
@@ -150,7 +163,7 @@ public class Main {
             } else {
                 // 访问文件
                 if (shouldHandle(file)) {
-                    //System.out.println("handle file: " + file);
+                    System.out.println("found file: " + file);
                     handle(file);
                 }
             }
@@ -177,7 +190,7 @@ public class Main {
 
         System.out.println();
         System.out.println("Total Time Used: " + ((double) (System.nanoTime() - startNanoTime)) / (1000 * 1000 *
-                                                                                                           1000.0d));
+                1000.0d));
     }
 
 }
