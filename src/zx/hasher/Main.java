@@ -54,7 +54,7 @@ public class Main {
                                         threadDigest.set(MessageDigest.getInstance("SHA-1"));
                                     }
                                     if (threadBuffer.get() == null) {
-                                        threadBuffer.set(ByteBuffer.allocateDirect(32 * 1024 * 1024));
+                                        threadBuffer.set(ByteBuffer.allocateDirect(32 * 1024));
                                     }
                                     FileInputStream fileInputStream = new FileInputStream(file);
                                     FileChannel channel = fileInputStream.getChannel();
